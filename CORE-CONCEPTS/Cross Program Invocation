@@ -1,0 +1,510 @@
+# CROSS PROGRAM INVOCATION
+
+# A CrossProgramInvocation refers to when one program invokes the instructions of another program
+# This allows for composability of Solana Programs
+# Instructions are as API endpoints that a program exposes to the network and a Cross Program Invocation  as one API internally invoking another API
+
+# Wallet Account
+
+# Signs and Sends
+# Transaction   -> invokes                 Program A        -> invokes                   ProgramB
+# Instruction                              Instruction                                   Instruction
+
+# Cross Program Invocations enable Solana program instructions to directly invoke instructions on another program
+# Signer privileges from a caller program extend to the callee program
+# When making a Cross Program Invocation, programs can sign on behalf of Program Derived Addresses derived from their own Program ID
+# The callee program can make further Cross Program Invocation to other programs, up to a depth of 4
+
+# DEFINITION OF A CPI
+# A CrossProgramInvocation is when one program invokes the instructions of another program
+# Writing a Program Instruction with a Cross Program Invocation follows the same pattern as building an instruction to add to a transaction. Each Cross Program Invocation must specify:
+# I: Program Address: Specifies the program to invoke
+# II: Accounts: Lists every account the instruction reads from or writes to, including other programs
+# III: Instruction Data: Specifies which instruction to invoke on the program, plus any data the instruction needs(function arguments)
+
+# When a Program makes a CrossProgramInvocation to another program:
+# 1: The signer privileges from the initial transaction extend to the callee program(A > B)
+# 2: The callee program can make further Cross Program Invocation to other programs upto a depth of 4(B -> C, C -> D)
+# 3: The program can sign on behalf of Program Derived Addresses derived from its Program ID
+
+# The Solana Program runtime sets a max_instruction_stack_depth constant of MAX_INSTRUCTION_STACK_DEPTH of 5. This represents the max height of the program instruction invocation stack. The stack height begins at 1 for the initial transaction and increases by one each time a program invokes another instruction. This setting of limits invocation depth for CPI's is 4
+
+# When a Transaction is processed, account priviledges extend from one program to another
+
+# Program A receives an instruction with:
+# 1: An account that signed the transaction
+# 2: An account that can be written to(mutable)
+
+# When program A makes a CrossProgramInvocation to Program B:
+# Program B gets to use these same accounts with their original permissions
+# Program B can sign with the signer account
+# Program B can write to the writable account
+# Program B can even pass these same permissions forward if it makes its own Cross Program Invocation
+
+## CROSS PROGRAM INVOCATIONS
+# The invoke function handles CrossProgramInvocations that do not require Program Derived Addresses signers. The function calls the invoke_signed functions with an empty signers_seed array, indicating no Program Derived Addresses required for signing
+
+``` rust
+pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
+    invoke_signed(instruction, account_infos, &[])
+}
+
+```
+
+# A SINGLE INSTRUCTION THAT TRANSFERS SOL FROM ONE ACCOUNT TO ANOTHER USING CROSS PROGRAM INVOCATION
+# ANCHOR FRAMEWORK
+# Example 1: Uses Anchor CpiContext and helper function to construct the CPI Instruction
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
+
+declare_id!("9AvUNHjxscdkiKQ8tUn12QCMXtcnbR9BVGq3ULNzFMRi");
+
+#[program]
+pub mod cpi {
+    use super::*;
+
+    pub fn sol_transfer(ctx: Context<SolTransfer>, amount: u64) -> Result<()>{
+        let from_pubkey = ctx.accounts.sender.to_account_info();
+        let to_pubkey = ctx.accounts.recipient.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        let cpi_context = CpiContext::new(
+            program_id,
+            Transfer{
+                from: from_pubkey,
+                to: to_pubkey
+            },
+        );
+
+        transfer(cpi_context, amount)?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SolTransfer<'info>{
+    #[account(mut)]
+    sender: Signer<'info>,
+    #[account(mut)]
+    recipient: SystemAccount<'info>,
+    system_program: Program<'info, System>,
+
+}
+
+```
+
+# Example 2: Uses the system_instruction::transfer function from the solana_program crate to construct the CPI instruction.
+
+``` rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{program::invoke, system_instruction};
+
+declare_id!("BrcdB9sV7z9DvF9rDHG263HUxXgJM3iCQdF36TcxbFEn");
+
+#[program]
+pub mod cpi {
+    use super::*;
+
+    pub fn sol_transfer(ctx: Context<SolTransfer>, amount: u64) -> Result<()>{
+        let from_pubkey = ctx.accounts.sender.account_info();
+        let to_pubkey = ctx.accounts.recipient.account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        let instruction = 
+        &system_instruction::transfer(&from_pubkey.key(), &to_pubkey.key(), amount);
+
+        invoke(instruction, &[from_pubkey, to_pubkey, program_id])?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SolTransfer<'info>{
+    #[account(mut)]
+    sender: Signer<'info>,
+    #[account(mut)]
+    recipient: SystemAccount<'info>,
+    system_program: Program<'info, System>,
+}
+
+```
+
+# Example 3: Constructs the Cross Program Invocation Manually
+``` rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{program::invoke, instruction::Instruction};
+
+declare_id("BrcdB9sV7z9DvF9rDHG263HUxXgJM3iCQdF36TcxbFEn");
+
+#[program]
+pub mod cpi {
+    use super::*;
+
+    pub fn sol_transfer(ctx:Context<SolTransfer>, amount: u64) -> Result<()>{
+        let from_pubkey = ctx.accounts.sender.to_account_info();
+        let to_pubkey = ctx.accounts.recipient.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        //Prepare instruction AccountMeta
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey.key(), true),
+            AccountMeta::new(to_pubkey.key(), false),
+        ];
+
+        //SOL Transfer instruction discriminator
+        let instruction_discriminator: u32 = 2;
+
+        //Prepare instruction data
+        let mut instruction_data = Vec::with_capacity(4 + 8);
+        instruction_data.extend_from_slice(&instruction_discriminator.to_le_bytes());
+        instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+        //create instruction
+        let instruction = Instruction{
+            program_id: program_id.key(),
+            accounts: account_metas,
+            data: instruction_data,
+        };
+
+        //Invoke Instruction
+        invoke(&instruction, &[from_pubkey, to_pubkey, program_id])?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SolTransfer<'info>{
+    #[account(mut)]
+    sender: Signer<'info>
+    #[account(mut)]
+    recipient: SystemAccount<'info>,
+    system_program: Program<'info, System>,
+}
+```
+
+# NATIVE RUST
+``` rust
+use borsh::BorshDeserialize;
+use solana_program::{
+    account_info::AccountInfo,
+    entrypoint,
+    entrypoint::ProgramResult,
+    program::invoke,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+    system_instruction,
+};
+
+//Declare program entrypoint
+entrypoint!(process_instruction);
+
+//Define Program Instructions
+#[derive(BorshDeserialize)]
+enum ProgramInstruction {
+    SolTransfer {amount: u64},
+}
+
+impl ProgramInstruction{
+    fn unpack(input: &[u8]) -> Result<Self, ProgramError>{
+        Self::try_with_slice(input).map_err(|| ProgramError::InvalidInstructionsData)
+    }
+}
+
+pub fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    //Deserialize instruction data
+    let instruction = ProgramInstruction::unpack(instruction_data)?;
+    //process instruction
+    match instruction {
+        ProgramInstruction::SolTransfer{amount}=> {
+            //Parse Accounts
+            let [sender_info, recipient_info, system_program_info] = accounts else {
+                return Err(ProgramError::NotEnoughAccountKeys);
+            };
+
+            //Verify the sender is a signer
+            if !sender_info.is_signer{
+                return Err(ProgramError::MissingRequiredSignature);
+
+            }
+            //create and invoke the transfer instruction
+            let transfer_ix = system_instruction::transfer(
+                sender_info.key(),
+                recipient_info.key(),
+                amount,
+            );
+            invoke(
+                &transfer_ix,
+                &[
+                    sender_info.clone(),
+                    recipient_info.clone(),
+                    system_program_info.clone(),
+                ],
+            )?;
+
+            Ok(())
+        }
+    }
+}
+```
+
+# CROSS PROGRAM INVOCATIONS WITH PROGRAM DERIVED ADDRESSES SIGNERS
+# The invoke_signed function handles the Cross Program Invocation that requires Program Derived Addresses signers
+# The function takes the seeds for deriving signer PDA'S as signer_seeds
+
+``` rust
+pub fn invoke_signed(
+    instruction: &Instruction,
+    account_infos: &[AccountInfo],
+    signer_seeds: &[&[&[u8]]],
+) -> ProgramResult {
+    // --snip
+    invoke_signed_unchecked(instruction, account_infos, signer_seeds)
+}
+```
+
+# When processing an instruction that includes a Cross Program Invocation, the Solana runtime internally calls create_program_address using the signer_seeds and the program_id of the calling program. When a valid Program Derive Address is verified, the address is added as a valid signer
+
+# Anchor Framework
+# Implement Cross Program Invocation in an Anchor Program, each at a different level of Abstraction
+
+# Example 1: Using Anchor's CpiContext and helper function to construct the Cross Program Invocation
+
+``` rust
+use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
+
+declare_id!("BrcdB9sV7z9DvF9rDHG263HUxXgJM3iCQdF36TcxbFEn");
+
+#[program]
+pub mod cpi {
+    use super::*;
+
+    pub fn sol_transfer(ctx:: Context<SolTransfer>, amount: u64) -> Result<()>{
+        let from_pubkey = ctx.accounts.pda_account.to_account_info();
+        let to_pubkey = ctx.accounts.recipient.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        let seed = to_pubkey.key();
+        let bump_seed = ctx.bumps.pda_account;
+        let signer_seeds: &[&[&[u8]]] = &[&[b"pda", seed.as_ref(), &[bump_seed]]];
+
+        let cpi_context = CpiContext::new(
+            program_id,
+            Transfer{
+                from: from_pubkey,
+                to: to_pubkey,
+            },
+        )
+        .with_signer(signer_seeds);
+
+       transfer(cpi_context, amount)?;
+       Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SolTransfer<'info>{
+    #[account(
+        mut,
+        seeds = [b"pda", recipient.key().as_ref()],
+        bump,
+    )]
+    pda_account: SystemAccount<'info>,
+    #[account(mut)]
+    recipient: SystemAccount<'info>
+    system_program: Program<'info, System>,
+}
+```
+
+# Example 2: Uses the system_instruction::transfer function from solana_program crate to construct the Cross Program Instruction
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{program::invoke_signed, system_instruction};
+
+declare_id!("BrcdB9sV7z9DvF9rDHG263HUxXgJM3iCQdF36TcxbFEn");
+
+#[program]
+pub mod cpi {
+    use super::*;
+
+    pub fn sol_transfer(ctx: Context<SolTransfer>, amount: u64) -> Result<()>{
+        let from_pubkey = ctx.accounts.pda_account.to_account_info();
+        let to_pubkey = ctx.accounts.recipient.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        let seed = to_pubkey.key();
+        let bump_seed = ctx.bumps.pda_account;
+
+        let signer_seeds: &[&[&[u8]]] = &[&[b"pda", seed.as_ref(), &[bump_seed]]];
+
+        let instruction = 
+        &system_instruction::transfer(&from_pubkey.key(), &to_pubkey.key(), amount);
+
+        invoke_signed(instruction, &[from_pubkey, to_pubkey, program_id], signer_seeds)?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SolTransfer<'info>{
+    #[account(
+        mut,
+        seeds = [b"pda", recipient.key().as_ref()],
+        bump,
+    )]
+    pda_account: SystemAccount<'info>,
+    #[account(mut)]
+    recipient: SystemAccount<'info>,
+    system_program: Program<'info, System>,
+}
+```
+
+# Example 3: Constructs the CrossProgramInvocation Manually
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{program::invoke_signed. instruction::{Instruction,AccountMeta}};
+
+declare_id!("BrcdB9sV7z9DvF9rDHG263HUxXgJM3iCQdF36TcxbFEn");
+
+#[program]
+pub mod cpi {
+    use super::*;
+
+    pub fn sol_transfer(ctx: Context<SolTransfer>, amount: u64) -> Result<()>{
+        let from_pubkey = ctx.accounts.pda_account.to_account_info();
+        let to_pubkey = ctx.accounts.recipient.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        //GET PDA Signer Seeds
+        let seed = to_pubkey.key();
+        let bump_seed = ctx.bumps.pda_account;
+        let signer_seeds: &[&[&[u8]]] = &[&[b"pda", seed.as_ref(), &[bump_seed]]];
+
+        //Prepare Instruction Account Meta
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey.key(), true),
+            AccountMeta::new(to_pubkey.key(), false),
+        ];
+
+        ///SOL Transfer Instruction discriminator
+        let instruction_discriminator: u32 = 2;
+        //prepare instruction data
+        let mut instruction_data = Vec::with_capacity(4 + 8);
+        instruction_data.extend_from_slice(&instruction_discriminator.to_le_bytes());
+        instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+        //Create Instruction
+        let instruction = Instruction{
+            program_id: program_id.key(),
+            accounts: account_metas,
+            data: instruction_data,
+        };
+
+        //Invoke Instructions with PDA Signer
+        invoke_signed(&instruction, &[from_pubkey, to_pubkey, program_id], signer_seeds)?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SolTransfer<'info> {
+    #[account(
+        mut,
+        seeds = [b"pda", recipient.key().as_ref()],
+        bump,
+    )]
+    pda_account: SystemAccount<'info>,
+    #[account(mut)]
+    recipient: SystemAccount<'info>,
+    system_program: Program<'info, System>,
+}
+```
+
+# NATIVE RUST
+# The program includes a single instruction that transfers SOL From a PDA to a recipient account using a CPI Signed by a PDA
+``` rust
+use borsh::BorshDeserialize;
+use solana_program::{
+    account_info::AccountInfo,
+    entrypoint,
+    entrypoint::ProgramResult,
+    program::invoke_signed,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+    system_instruction,
+};
+
+//Declare program entry point
+entrypoint!(process_instruction);
+
+//Define program instruction
+#[derive(BorshDeserialize)]
+enum ProgramInstruction{
+    SolTransfer {amount: u64},
+}
+
+impl ProgramInstruction {
+    fn unpack(input: &[u8]) -> Result<Self, ProgramError>{
+        Self::try_from_slice(input).map_err(|_| ProgramError::InvalidInstructionData)
+    }
+}
+
+pub fn process_instruction(
+    program_id: &Pubkey,
+    account: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    //Deserialize instruction data
+    let instruction = ProgramInstruction::unpack(instruction_data)?;
+    //process instructions
+    match instruction{
+        ProgramInstruction::SolTransfer{amount} => {
+            //Parse Accounts
+            let [pda_account_info, recipient_info, system_program_info] = accounts else {
+                return Err(ProgramError::NotEnoughAccountKeys);
+            };
+
+            //Derive PDA and verify it matches the account provided by the client
+            let recipient_pubkey = recipient_info.key;
+            let seeds = &[b"pda", recipient_pubkey.as_ref()];
+            let (expected_pda, bump_seed) = Pubkey::find_program_address(seeds, program_id);
+
+            if expected_pda != *pda_account_info.key{
+                return Err(ProgramError::InvalidArgument);
+            }
+
+            //Create the transfer instruction
+            let transfer_ix = system_instruction::transfer(
+                pda_account_info.key(),
+                recipient_info.key(),
+                amount,
+            );
+
+            //Create Signer seeds for PDA
+            let signer_seeds:  &[&[&[u8]]] = &[&[b"pda", recipient_pubkey.as_ref(), &[bump_seed]]];
+
+            //Invoke the transfer instruction with PDA as A Signer
+            invoke_signed (
+                &transfer_ix,
+                &[
+                    pda.account_info.clone(),
+                    recipient_info.clone(),
+                    system_program_info.clone(),
+                ],
+                signer_seeds,
+            )?;
+
+            Ok(())
+        }
+    }
+}
+```
+

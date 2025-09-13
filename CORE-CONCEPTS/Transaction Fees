@@ -1,0 +1,106 @@
+# TRANSACTION FEES
+
+# Every solana program requires a base fee(SOL) to compensate validators for processing the transaction 
+# One can also pay an optional prioritization fee to increase the chance that the current leader(validator) processes one transaction
+
+## KEY POINTS
+# The base fee for the transaction is 50000 lamports per signature on the transaction
+# The prioritization fee(optional) is an extra fee one pays to the validator to increase the chance that the current leader processes the transaction
+# The proritzation fee equals (compute unit limit x compute unit price)
+# The compute unit limit is the maximum compute unit a transaction can use
+# The compute unit price is the price per compute unit, in micro-lamports
+# 1000000 micro-lamports = 1 lamports
+# The transaction fee payer must be an account owned by the System Program
+
+### BASE TRANSACTION FEE
+# The base fee is the cost of sending a transaction. The cost is 5000 lamports per signature included in the signature
+# The base fee comes out of the transaction fee payer's account, which is the first signer on the transaction. The fee payer must be an account owned by the System Program
+
+* 50% Burned: Half of the Base fee gets burned
+* 50% Distribution: Half is paid to the validator that processed the transaction
+
+PRIORITIZATION FEE
+# The prioritization fee is an optional fee paid to increase the chance that the current leader processes one's transaction
+# SIM-0096: The validator processing the transaction receives 100% of the priority fee
+
+COMPUTE UNITS AND LIMITS
+# When a transaction is processed, it uses computational resources measured in compute units(CU)
+# Each instruction deducts from the transaction's compute unit budget
+# MAX LIMIT: A transaction can use up to 1.4 million compute units
+# DEFAULT LIMIT: By default, each instruction can use up to 200,000 compute units
+# CUSTOM LIMIT: You can request a specific compute unit limit, by including SetComputeUnitLimit
+# instruction in a transaction
+
+### COMPUTE UNIT PRICE
+# The Compute Unit Price is an optional amount, specified in micro-lamports, that one pays for each compute unit requested
+# That price is used to calculate the prioritizatio fee of the transaction
+
+# 1,000,000 micro-lamports = 1 lamport
+
+### prioritization fee calculation
+# Prioritization Fee = Compute Unit  Limit x Compute Unit Price
+# The recommended approach for setting priority fee is to first simulate the transaction to estimate the required compute units
+# Then add a 10% safety margin to this estimate and use the resulting value as the Compute Unit Limit
+# The transaction priority which determines how much it is prioritized relative to other transactions, it is calculated as:
+# Priority = ((Compute Unit Limit x Compute Unit Price) + BaseFee)/(1 + ComputeUnitLimit + SignatureCUs + Write Lock CUs)
+
+# Use this instructions to set the compute unit limit and price on a transaction:
+# SetComputeUnitLimit to set a specific unit limit
+# SetComputeUnitPrice to define the price per compute unit
+
+``` rust
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    compute_budget::ComputeBudgetInstruction,
+    native_token::LAMPORTS_PER_SOL,
+    signature::{Keypair, Signer},
+    system_instruction,
+    transaction::Transaction,
+};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    let client = RpcClient::new_with_commitment(
+        String::from("http://localhost:8899"),
+        CommitmentConfig::confirmed(),
+    );
+
+    let sender = Keypair::new();
+    let recipient = Keypair::new();
+
+    let airdrop_signature = client.request_airdrop(&sender.pubkey(), LAMPORTS_PER_SOL)
+    .await?;
+
+    loop {
+        let confirmed = client.confirm_transaction(&airdrop_signature).await?;
+        if confirmed {
+            break;
+        }
+    }
+
+    //create compute budget instructions
+    let limit_instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
+    let price_instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
+
+    let transfer_amount = LAMPORTS_PER_SOL / 100; //0.01
+    let transfer_instruction =
+    system_instruction::transfer(&sender.pubkey(), &recipient.pubkey(), transfer_amount);
+
+    let recent_blockhash = client.get_latest_blockhash().await?;
+
+    let mut transaction = Transaction::new_with_payer(
+        &[limit_instruction, price_instruction, transfer_instruction],
+        Some(&sender.pubkey()),
+    );
+
+    transaction.sign(&[&sender], recent_blockhash);
+
+    let signature = client.send_and_confirm_transaction(&transaction).await?;
+    println!("Transaction Signature {}", signature);
+    
+    Ok(())
+
+}
+
+```

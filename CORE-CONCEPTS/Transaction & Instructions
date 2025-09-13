@@ -1,0 +1,398 @@
+# TRANSACTIONS AND INSTRUCTIONS
+
+# On Solana Users send transactions to interact with the network. Transactions contain one or more instructions that specify operations to process
+# The execution logic for instructions are stored on programs deployed on the Solana Network, where each program defines its own set of instructions
+
+# SOLANA TRANSACTION PROCESSING
+# 1: If a transaction includes multiple instructions, the instructions execute in the order added to the transaction
+# 2: Transactions are atomic: all instructions must process successfully,  or the entire transaction fails and no changes occur
+
+# A transaction is essentially a request to process one or more instructions(An envelop containing forms) Each form is an instruction that tells the network what it is to do
+
+#                                      Transaction
+#                                      Instruction 1
+#                                      Instruction 2
+#                                      Instruction 3           
+
+# KEY POINTS
+# 1: Solana transactions include instructions that invoke programs on the network
+# 2: Transactions are atomic: if any instructions fail, the entire transaction fails and no changes occur
+# 3: Instructions in a transaction execute in a sequential order
+# 4. The transaction size limit is 1232 bytes
+# 5: Each instruction requires three pieces of information:
+#     The address of the program to invoke
+#     The accounts the instruction reads from or writes to
+#     Any extra data required by the instruction(function arguments)
+
+# SOL TRANSFER
+# A Transaction with a single instruction to transfer SOL from sender to reciever
+# On Solana, "wallets" are accounts owned by the System Program. Only the Program owner can change the account data, so transferring SOL requires sending a transaction to invoke the System Program
+
+# ADDRESS
+# Sender Wallet Account
+
+# Signs and Sends                 
+#                                        SOL Transfer Instruction                        AccountMeta
+# Transaction                               Instructions                               SenderAddress
+# Message                                   System Program                           is_signer:true,
+# Instructions                              Accounts:                              is_writable:true,
+# Recent Blockhash                          Transfer Amount
+
+#                                                                                        AccountMeta
+#                                                                                                                                                                                        RecieverAddress
+#                                                                                   is_signer:false,
+#                                                                                  is_writable:true
+# Signers
+
+# The Sender Account must sign(is_signer) the transaction to let the System Program deduct its lamport balance. The sender and recipient accounts must be writable(is_writable) since their lamport balance changes
+# After sending the transaction, the System Program processes the transfer instruction
+# The System Program then updates the lamport balances of both the sender and recipient accounts
+
+# Sending a transaction that transfers SOL from one account to another
+
+``` rust
+use anyhow::Result;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    signer::keypair::Keypair, system_instruction, transaction::Transaction,
+};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    //Create a connection to cluster
+    let connection = RpcClient::new_with_commitment(
+        "http://localhost:8899".to_string(),
+        CommitmentConfig::confirmed(),
+    );
+
+    //Generate Sender and Recipient Keys
+    let sender = Keypair::new();
+    let reciever = Keypair::new();
+
+    //Fund sender with airdrop
+    let airdrop_signature = connection
+    .request_airdrop(&sender.pubkey(), LAMPORTS_PER_SOL)
+    .await?;
+loop {
+    let confirmed = connection.confirm_transaction(&airdrop_signature).await?;
+    if confirmed {
+        break;
+    }
+}
+
+    //Check balance before transfer
+    let pre_balance1 = connection.get_balance(&sender.pubkey()).await?;
+    let pre_balance2 = connection.get_balance(&recipient.pubkey()).await?;
+
+    //Define the amount to transfer
+    let transfer_amount = LAMPORTS_PER_SOL / 100; //0.01 
+
+    //Create a transfer Instruction
+    let transfer_instruction = 
+    system_instruction::transfer(&sender.pubkey(), &recipient.pubkey(), transfer_amount);
+
+    //Add the transfer instruction to a new transaction
+    let mut transaction = 
+    Transaction::new_with_payer(&[transfer_instruction], Some(&sender.pubkey()));
+    let blockhash = connection.get_latest_blockhash().await?;
+    transaction.sign(&[&sender], blockhash);
+
+    //Send the transaction to the network
+    let transaction_signature = connection
+    .send_and_confirm_transaction(&transaction)
+    .await?;
+
+    //check balance after transfer
+    let post_balance1 = connection.get_balance(&sender.pubkey()).await?;
+    let post_balance2 = connection.get_balance(&recipient.pubkey()).await?;
+
+    println!(
+        "Sender prebalance: {}", 
+        pre_balance1 as f64 / LAMPORTS_PER_SOL as f64
+    );
+
+    println!(
+        "Recipient prebalance: {}",
+        pre_balance2 as f64 / LAMPORTS_PER_SOL as f64
+    );
+
+    println!(
+        "Sender postbalance: {}",
+        post_balance1 as f64 / LAMPORTS_PER_SOL as f64
+    );
+
+    println!(
+        "Recipient postbalance: {}",
+        post_balance2 as f64 / LAMPORTS_PER_SOL as f64
+    );
+
+    println!("Transaction signature: {}", transaction_signature);
+
+    Ok(())
+}
+```
+
+# Client libraries often abstract the details  for building program instructions
+
+# TRANSFER INSTRUCTION
+``` rust
+let transfer_amount = LAMPORTS_PER_SOL / 100; //0.01 SOL
+let transfer_instruction = 
+system_instruction::transfer(&sender.pubkey(), &recipient.pubkey(), transfer_amount);
+
+```
+
+# INSTRUCTIONS
+# An instruction on Solana Program can be thought as a public function that can be called by anyone using the solana network
+# A Solana program can be thought as a web server hosted on the Solana network, where each instruction is like a public API endpoint that users can call to perform specific  actions
+# Invoking an instruction is similar to sending a POST request to an API  endpoint, allowing users to execute the program's business logic
+# To call a program instruction on Solana one needs to construct an instruction with three pieces of information:
+# 1. Program ID: The address of the Program with the business logic for the instruction being invoked
+# 2. Accounts: The list of all accounts the instruction reads from or writes to
+# 3. Instruction Data: A byte array specifying which instruction to invoke on the program and any arguments required by the instructions
+
+``` rust
+pub struct Information {
+    ///Pubkey of the program that executes the instruction
+    pub program_id: Pubkey,
+    ///Metadata describing accounts that should be passed to the program
+    pub accounts: Vec<AccountMeta>,
+    ///Opaque data passed to the program for its own interpretation
+    pub data: Vec<u8>,
+}
+```
+# TRANSACTION INSTRUCTION     
+#                              Instruction
+# transaction                  Program Address
+# Instruction                  Accounts
+#                              Instruction Data
+
+# ACCOUNT META
+# When creating an instruction, one must provide each required account as an AccountMeta
+# The AccountMeta specifies the following:
+# 1: pubkey: The address of the account
+# 2: is_signer: Whether the account must sign the transaction
+# 3: is_writable: Whether the instruction modifies the account data
+
+``` rust
+pub struct AccountMeta {
+    ///An account's public key
+    pub pubkey: Pubkey,
+    ///True if an `Instruction` requires a `Transaction` signature matching the `pubkey`
+    pub is_signer: bool,
+    /// True if the account data or metadata may be mutated during program execution
+    pub is_writable: bool,
+}
+```
+
+# By Specifying up front which accounts an instruction reads or writes, transactions that do not modify the same account can execute in parallel
+
+# SOL TRANSFER INSTRUCTION
+``` rust
+use anyhow::Result;
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL, signature::Signer, signer::keypair::Keypair, system_instruction, 
+};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    //Generate Sender and Recipient keypair
+    let sender = Keypair::new();
+    let recipient = Keypair::new();
+    //Define the amount to transfer
+    let transfer_amount = LAMPORTS_PER_SOL / 100; //0.01 
+
+    //Create a transfer instruction for transferring SOL from sender to recipient
+    let transfer_instruction = system_instruction::transfer(
+        &sender.pubkey(),
+        &recipient.pubkey(),
+        transfer_amount,
+    );
+
+    println!("{:#?}", transfer_instruction);
+
+    Ok(())
+}
+```
+
+# Every Solana instruction requires the following Information
+# 1: Program ID: The address of the program that will execute the instruction
+# 2: Accounts: A list of accounts required by the instruction. For each account, the instruction must specify the address, whether it must sign the transaction, and whether it will be written to
+# 3. Data: A byte buffer that tells the program which instruction to execute and includes any argument required by the instruction
+
+# TRANSACTIONS
+# After one has created instructions to invoke, the next step is to create a Transaction and add instructions to the transaction
+# A Solana transaction is made up of:
+# 1: Signatures: An array of Signatures from all accounts required as signers for the  instructions in the transaction. A signature is created by signing the transaction Message with the Account private key
+# 2: Message: The transaction message including the list of instructions  to be processed atomically
+
+# Transaction
+``` rust
+pub struct Transaction {
+    #[wasm_bindgen(skip)]
+    #[serde(with = "short_vec")]
+    pub signatures: Vec<Signature>,
+
+    #[wasm_bindgen(skip)]
+    pub message: Message,
+}
+```
+# Compact Array of Signatures                   Message
+# (64 bytes * # of signatures)
+
+# The structure of a trasaction message consists of: 
+# Message Header: Specifies the number of signer and read-only accounts
+# Account Addresses: An array of account, addresses required by instructions on the transactions
+# Recent Blockhash:  Acts as a timestamp for the transaction
+# Instructions: An array of instructions to be executed
+
+``` rust
+pub struct Message {
+    /// The Message Header, identifying signed and read-only `account_keys`
+    pub header: MessageHeader,
+
+    ///All the account keys used by the transaction
+     #[serde(with = "short_vec")]
+     pub account_keys: Vec<Pubkey>,
+
+     //The id of a recent ledger entry
+     pub recent_blockhash: Hash,
+     ///Programs that will be executed in sequence and commited in 
+     /// one atomic instruction if all succeeds
+     #[serde(with = "short_vec")]
+     pub instructions: Vec<CompiledInstruction>,
+}
+
+```
+
+# Transaction Size
+# Solana Transactions have a size limit of 1232 bytes. The limit comes from Ipv6 Maximum Transmission Unit(MTU) size of 1280 bytes, minus 48 bytes for network headers(40 bytes IPv6 + 8 Bytes header)
+# A transaction's total size(signatures and message) must stay under this limit and includes:
+# Signatures: 64 bytes each
+# Message: Header(3 bytes), account keys(32 bytes each), recent blockhash(32 bytes), and instructions
+
+# Signatures: maximum of 19, 64bytes each          Messages: Metadata + Accounts: maximum of 35,
+#                                                  32 bytes each
+#                                       1232 bytes 
+
+# MESSAGE HEADER
+# The message header specifies the permissions for the account in the transaction
+# It works in combination with the strictly ordered account addresses to determine which accounts are signers and which are writable
+
+# 1: The number of signatures required for all instructions on the transaction
+# 2: The number of signed accounts that are read-only
+# 3: The number of unsigned accounts that are read-only
+
+``` rust
+pub struct MessageHeader {
+    /// The number of signatures required for this message to be considered 
+    /// valid. The signers of those signatures must match the first
+    /// `num_required_signatures` of [`Message::account_keys`].
+    pub num_required_signatures: u8,
+    /// The last `num_readonly_signed_accounts` of the signed keys are read-only
+    /// accounts
+    pub num_readonly_signed_accounts: u8,
+    ///The last `num_readonly_unsigned_accounts` of the unsigned keys are 
+    /// read-only accounts
+    pub num_readonly_unsigned_accounts: u8,
+}
+```
+#                                    Header
+#                                    (3 bytes)
+
+# of required                        of read-only account                    of read-only account
+# signatures                         addresses that require                  addresses that do not 
+# (u8)                               signatures (u8)                         require signatures(u8)
+
+
+# COMPACT ARRAY FORMAT
+# A compact-array  in a transaction message  is an array serialized in the following format:
+# 1: The array length(encoded as compact-u16)
+# 2: The array items listed one after the other
+
+# This format is used to encode the lengths of the Account addresses and Instruction Arrays in transaction messages
+
+# ARRAY OF ACCOUNT ADDRESSES
+# A transaction message contains a single list of all account addressesrequired by its instructions
+# The array starts with  a compact-u16  number indicating how many addresses it contains
+# To save space, the transaction does not store permissions for each account individually. Instead it relies on a combination of the MessageHeader and a strict ordering of the account addresses to determine permissions
+# The addresses are ordered in the following ways:
+# 1: Accounts that are writable and signers
+# 2: Accounts that are read-only and signers
+# 3: Accounts that are writable and not signers
+# 4: Accounts that are read-only and not signers
+
+# The MessageHeader provides the values used to determine the number of accounts for each permission group
+
+# RECENT BLOCKHASH
+# Every transaction requires a recent blockhash that serves two purposes:
+# I: Acts as a timestamp for when the transaction is created
+# II: Prevents duplicate transactions
+
+# A blockhash expires after 150 Blocks(about 1 minute assuming 400msblock times)
+# after which the transaction is considered expired and cannot be processed
+# One can use the getLatestBlockhash RPC method to get the current blockhash  and last block height
+# at which the blockhash will be valid
+
+# ARRAY OF INSTRUCTIONS
+# A transaction message contains an array of Instructions in the CompiledInstruction type
+# Instructions are converted to this type when added to a transaction
+# Like the account addresses array in the message, it starts with a compact-u16 length  followed by the instruction data. Each Instruction contains:
+# 1: Program ID Index: An index that points to the program's address in the account addresses array. This specifies the program that processes the instructions
+# 2: Account Indexes: An Array of indexes that points to the account addresses required for this instructions
+# 3: Instruction Data: A byte array that specifies which instruction to invoke on the program and any additional data required by this instruction(function arguments)
+
+``` rust
+pub struct CompiledInstructions {
+    ///Index into the transaction keys array indicating the program account that executes this instruction
+    pub program_id_index: u8,
+    ///Ordered indices into the transaction keys array indicating which accounts to pass to the program
+    #[serde(with = "vec_short")]
+    pub accounts: Vec<u8>,
+    ///the program input data
+    #[serde(with = "short_vec")]
+    pub data: Vec<u8>,
+    
+}
+```
+
+# Transaction Structure
+``` rust
+use anyhow::Result;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    signer::keypair::Keypair, system_instruction
+};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    let connection = RpcClient::new_with_commitment(
+        "http://localhost:8899".to_string(),
+        CommitmentConfig::confirmed(),
+    );
+    //fetch the latest blockhash and last valid block height
+    let blockhash = connection.get_latest_blockhash().await?;
+    //Generate Sender and Recipient Keypair
+    let sender = Keypair::new();
+    let recipient = Keypair::new();
+
+    //Create a transfer instruction for transferring SOL from Sender to recipient
+    let transfer_instruction = system_instruction::transfer(
+        &sender.pubkey(),
+        &recipient.pubkey(),
+        LAMPORTS_PER_SOL / 100,
+    );
+
+    let mut transaction = 
+    Transaction::new_with_payer(&[transfer_instruction], Some(&sender.pubkey()));
+    transaction.sign(&[&sender], blockhash);
+
+    println!("{:#?}", transaction);
+
+    Ok(())
+}
+
+
+```

@@ -1,0 +1,411 @@
+# SOLANA ACCOUNT MODEL
+
+# On Solana all data is stored in what are called "accounts".(Data on Solana is a public database with a Single Account table where each entry in this table is an "account")
+# Every Solana account shares the same base Account type
+
+# Structure of an account
+
+``` rust
+pub struct Account {
+    pub lamports: u64,
+    pub data: Vec<u8>,
+    pub owner: Pubkey,
+    pub executable: bool,
+    pub rent_epoch: Epoch,
+}
+
+```
+# KEY POINTS
+# Accounts can store up to 10MiB of data, which contains either executable program code or program
+state
+# Accounts require a rent deposit in lamports(SOL) that is proportional to the amount of data stored , and one can fully recover it when the account is closed
+# Every account has a program owner, Only the program that owns the account, can change its data or deduct its lamport balance. But anyone can increase its balance
+# Sysvar accounts, are special accounts that store network cluster state
+# Program accounts, store executable code of smart contracts
+# Data accounts are created by programs to store and manage program state
+
+ACCOUNT
+# Every account on Solana has a unique 32byte address, often shown as a base58 encoded string
+# The relationship between the accountand its address works like a key-value pair, where the address is the key to locate the corresponding on-chain data on the account
+# The account address acts as the "Unique ID"  for each entry in the "Accounts" table
+# Most Solana accounts use an Ed25519 public key as their address
+
+``` rust
+use solana_sdk::signer::{keypair:: Keypair, Signer};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    let keypair = Keypair::new();
+    println!("Public Key: {}", keypair.pubkey());
+    println!("Secret Key: {}", keypair.to_bytes());
+}
+```
+
+# While public keys are commonly used as account addresses, Solana also supports a feature known as Program Derived Addresses(They are special addresses that one can deterministically derive from a Program ID and optional inputs(seeds))
+
+``` rust
+use solana_sdk::pubkey;//macro
+use solana_sdk::pubkey::Pubkey;
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    let program_address = pubkey!("11111111111111111111111111111111");
+    let seeds = [b"helloWorld".as_ref()];
+    let (pda, bump) = pubkey::find_program_address(&seeds, &program_address);
+    println!("PDA: {}", pda);
+    println!("Bump: {}", bump);
+
+}
+```
+
+# ACCOUNT TYPE
+# Accounts have a max size of 10MiB and every account on Solana shares the same Base Account type
+
+  Account
+  Data: Bytes,
+  Executable: Boolean,
+  Lamports: Number,
+  Owner: Program Address,
+
+ ``` rust
+ pub struct Account {
+    ///lamports in the account
+    pub lamports: u64,
+    //data held in the account
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
+    pub data: Vec<u8>,
+    ///the program that owns the account, if executable the program loads the account
+    pub owner: Pubkey;
+    //this account's data contains a loaded program
+    pub executable: bool,
+    //the epoch, at which this account will next owe rent
+    pub rent_epoch: Epoch,
+ } 
+``` 
+
+# LAMPORT FIELD 
+# The account's balance in lamports the smallest unit of SOL(1 SOL = 1 billion lamports)
+# An Account SOL Balance is the amount in the lamport's field converted to SOL
+
+# Solana Accounts must have a minimum lamport balance that is proportional to the amount of data stored on the account(in bytes). This minimum balance is called "rent"
+# The lamport balance stored in the account can be fully recovered when the account is closed
+
+# DATA FIELD
+# A byte array that stores arbitrary data for an account. The data field  is commonly called "account data"
+# For programm accounts(smart contracts), the field either contains the executable program code itself, or the address of another account that stores the executable program code
+# For non-executable accounts, this generally stores state that is meant to read from
+
+# Reading Data from a Solana Account involves:
+# I Fetch the account using its address
+# II Deserialize the account data field from raw bytes into the appropriate data structure, which is defined by the program that owns the account
+
+# OWNER FIELD
+# The Program ID(public key) of the program that owns the account
+# Every Solana account has a designated program as its owner. Only the program that owns the account can change the account data or deduct its lamport balance
+# The instructions defined in a program determines how the account's data and lamport balance can be changed 
+
+# EXECUTABLE FIELD
+# This field indicates if an account is an executable program
+# If true, the account is an executable solana program
+# If false, the account is a data account that stores state
+
+# For executable accounts, the owner's field contains the program ID of a loader program
+# Loader programs are built-in programs resposnible for loading and managing executable program accounts
+
+# RENT EPOCH
+# The rent_epoch field is  legacy field that is no longer used
+# Originally, the field tracked when an account would need to pay rent(in lamports)
+# to maintain its data on the network
+
+``` rust
+pub struct Account {
+    ///lamports in the account
+    pub lamports: u64,
+    //data held in the account
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))],
+    pub data: Vec<u8>,
+    ///the program that owns this account. If executable , that program loads this account
+    pub owner: Pubkey,
+    /// this account data contains a loaded program
+    pub executable: bool,
+    //the epoch at which the account owes rent
+    pub rent_epoch: Epoch,
+}
+
+//Token Mint Account
+Accounts {
+    lamports: 1461600,
+    data.len: 82,
+    owner: TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb,
+    executable: false,
+    rent_epoch: 0,
+    data: 010000001e213c90625a7e643d9555bb01b6c3fe6416d7afd523ce8c7ddd9b923ceafb9d00000000000000000901010000001e213c90625a7e643d9555bb01b6,
+}
+
+//Token Program Account
+Accounts {
+    lamports: 4513200894,
+    data.len: 134080,
+    owner: BPFLoader2111111111111111111111111111111111,
+    executable: true,
+    rent_epoch: 18446744073709551615,
+    data: 7f454c460201010000000000000000000300f70001000000d8f90000000000004000000000000000800902000000000000000000400038000400400009000800,
+}
+```
+
+# rent
+# To store data on-chain , accounts must also keep a lamport(SOL) balance that is proportional to the amount of data stored on the account(in bytes)
+# This balance is called "rent" but it works more like a deposit because one can recover the full amount  when the account is closed.
+
+# Program Owner
+# On Solana 'smart contracts' are called programs. Program Ownership is a key part of the Solana Account Model. Every Account has a designated program as its owner. Only the Owner program can:
+# I: Change the account data field
+# II: Deduct lamports from the account's balance
+
+# Each program defines the structure of the data stored in the account data field. The program's instruction  determine how this data and the account's lamport balance can be changed
+
+# SYSTEM PROGRAM
+# By default, all new accounts are owned to the System Program. The System Program performs the following key functions:
+
+# 1. New Account Creation: Only the System Program can create new Accounts
+
+# 2. Space Allocation: Sets the byte capacity for the data field of each account
+
+# 3. Assign Program Ownership: Once the System Program creates an account, it can reassign the designated program owner to a different program account. That is how custom programs take ownership of new accounts created by System Programs
+
+# 4. Transfer SOL: Transfers lamports(SOL) from the System Accounts to other Accounts
+
+# NOTE: All "wallet" accounts on Solana are System Accounts owned by the System Program
+# The lamport balance in these accounts show the amount of SOL owned by the wallet. Only System accounts can pay transaction fees
+
+# System Program
+
+# Wallet Account         Account
+#                        Data: None,
+#                        Executable: False,
+#                        Lamports: 1,000,000
+#                        Owner: System Program
+
+# When SOL is sent to a new address for the first time, an account is automatically created at that address owned by the system program
+
+``` rust
+use anyhow::Result;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    native_token::LAMPORTS_PER_SOL,
+    signer::{keypair::Keypair, Signer},
+};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    //Generate a new Key Pair
+    let keypair = Keypair::new();
+    println!("Public Key: {}", keypair.pubkey());
+
+    //Create a connection to Solana Cluster
+    let connection = RpcClient::new_with_commitment(
+        "http://localhost:8899".to_string(),
+        CommitmentConfig::confimed(),
+    );
+
+    //Funding an address with SOL
+    let signature = connection
+    .request_airdrop(&keypair.pubkey(), LAMPORTS_PER_SOL)
+    .await?;
+    connection.confirm_transaction(&signature).await?;
+
+    let account_info = conection.get_account(&keypair.pubkey()).await?;
+    println!("{:#?}", account_info);
+
+    Ok(())
+}
+
+```
+
+# SYSVAR ACCOUNTS
+# Sysvar accounts are special accounts at predefined addresses that provide access to cluster state data
+# These accounts update dynamically with data about  the network cluster
+
+# fetch and deserialize data from a Sysvar Clock Account
+``` rust
+use anyhow::Result;
+use bincode::deserialize;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    sysvar::{self, clock::Clock},
+};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    let connection = RpcClient::new_with_commitment(
+        "https://api.mainnet-beta.solana.com".to_string(),
+        CommitmentConfig::confirmed(),
+    );
+
+    let account = connection.get_account(&sysvar::clock::ID).await?;
+    //Desrialize the account data
+    let clock: Clock = deserialize(&account.data)?;
+
+    println!("{:#?}", account);
+    println!("{:#?}", clock);
+
+    Ok(())
+}
+```
+
+# PROGRAM ACCOUNT
+# Deploying a Solana Program creates an executable program account. The program account stores the executable code of the program. Program Accounts are owned by the Loader Program
+
+# PROGRAM EXECUTABLE DATA ACCOUNT
+# Address
+# (BPF Loader)
+#                           Account                       Account Data
+# Address                   Data
+# Program                   Executable: true,
+#                           Lamports: Number,
+#                           Owner: BPF Loader
+
+
+
+# For Simplicity, one can treat the program account as the program itself. When One invokes a program's instructions, you specify the program's account address("Program ID")
+
+# A Token Program Account to show that program accounts have the same base Account type, except that the executable field is set to true
+# Since Program Accounts contain executable code, in their data field, the data is not deserialized
+
+``` rust
+use anyhow::Result;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    let connection = RpcClient::new_with_commitment(
+        "https://api.mainnet-beta.solana.com".to_string(),
+        CommitmentConfig::confirmed(),
+    );
+
+    let program_id = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+    let account_info = connection.get_account(&program_id).await?;
+    println!("{:#?}", account_info);
+
+    Ok(())
+}
+```
+
+# When One deploys a Solana Program, it is stored in the Program Account that are owned by the Loader program
+
+# BUFFER ACCOUNT
+# Loader-v3 has a special account type for temporarily staging the upload of a program during deployment or upgrades
+
+# PROGRAM DATA ACCOUNT
+# Loader v3 works differently from all other BPF Loader Programs.The Program Account only contains the address of a program data account, which stores the actual executable code
+
+# DATA ACCOUNT
+# On Solana, the executable code of a program, is stored in a different account than the program state. 
+# To maintain state, programs define instructions to create separate accounts that they own
+# Each of these accounts has its own unique address and can store any arbitrary  data defined by the program
+
+# Address
+# (BPF LOADER)
+
+#                             Account                         Account Data
+# Address                     Data                            Program Code
+# Program                     Executable: true,
+#                             Lamports: Number,
+#                             Owner: BPF Loader
+
+#                             Account                         Account Data
+# Address                     Data                            Program State
+# Data Account                Executable: False, 
+#                             Lamports: Number,
+#                             Owner: Program        
+
+# Only the SystemProgram can create new Accounts. Once the System Program creates an account, it can then assign ownership of the new account to the other program
+# Creating a data account for a custom programs involvs two steps:
+# I: Invoke the System Program to create an account, then transfer ownership of the custom program
+# II: Invoke the custom program, which now owns the account, to initialize the account data as defined by the program instructions
+# This account creation process is often abstracted as a single step
+
+``` rust
+use anyhow::Result;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    program_pack::Pack,
+    signature::{Keypair, Signer},
+    system_instruction::create_account,
+    transaction::Transaction
+};
+
+use spl_token_2022::{id as token_2022_program_id, instruction::initialize_mint, state::Mint};
+
+#[tokio::main]
+async fn main() -> Result<()>{
+    //Create connection to local validator
+    let client = RpcClient::new_with_commitment(
+        String::from("http://localhost:8899"),
+        CommitmentConfig::confirmed(),
+    );
+
+    let recent_blockhash = client.get_latest_blockhash().await?;
+
+    //Generate a new keypair for the fee payer
+    let fee_payer = Keypair::new();
+
+    //Airdrop 1 SOL to fee payer
+    let airdrop_signature = client
+    .request_airdrop(&fee_payer.pubkey(), 1_000_000_000)
+    .await?;
+
+    loop {
+        let confirmed = client.confirm_transaction(&airdrop_signature).await?;
+        if confirmed {
+            break;
+        }
+    }
+
+    //Generate Keypair to use as an address
+    let mint = Keypair::new();
+
+    let space = Mint::LEN;
+    let rent = client.get_minimum_balance_for_rent_exemption(space).await?;
+
+    //Create account instruction
+    let create_account_instruction = create_account(
+        &fee_payer.pubkey(), //fee payer
+        &mint.pubkey(), //mint address
+        rent, //rent
+        space as u64, //space
+        &token_2022_program_id(), //program id
+    );
+
+    //Initialize mint transaction
+    let initialize_mint_transaction = initialize_mint(
+        &token_2022_program_id(),
+        &mint.pubkey(), //mint address
+        &fee_payer.pubkey(), //mint authority
+        Some(&fee_payer.pubkey()), //freeze authority
+        9, //decimals
+
+    )?;
+    //Create transaction and add instruction
+    let transaction = Transaction::new_signed_with_payer(
+        &[create_account_instruction, initialize_mint_instruction],
+        Some(&fee_payer.pubkey());
+        &[&fee_payer, &mint],
+        recent_blockhash,
+    );
+
+    //send and confirm transaction
+    let transaction_signature = client.send_and_confirm_transaction(&transaction).await?;
+
+    println!("Mint Address: {}", mint.pubkey());
+    println!("Transaction Signature: {}", transaction_signature);
+
+    let account_info = client.get_account(&mint.pubkey()).await?;
+    println!("{:#?}", account_info);
+}
+```
