@@ -1,0 +1,112 @@
+# SOLANA CLUSTERS
+
+# The Solana blockchain has several different groups of validators, known as Clusters Each serving different purposes within the overall ecosystem and containing dedicated API  nodes to fulfill JSON-RPC requests for their respective clusters
+# The individual nodes within a cluster are owned and operated by third parties, with a public endpoint available for each
+
+# SOLANA PUBLIC RPC ENDPOINTS
+
+# The Solana Labs organization operates a public RPC endpoint for each Cluster. Each of these public endpoints are subject to rate limits, but are available for users and developers to interact with the Solana Blockchain
+
+# "Public endpoints rate limits are subject to change."
+
+# USING EXPLORERS WITH DIFFERENT CLUSTERS
+
+# Many of the popular Solana Blockchain explorers support selecting any of the Clusters, often allowing advanced users to add a custom/private PRC endpoint as well
+# Solana Blockchain explorers include:
+# 1:  http://explorer.solana.com/.
+
+# 2: http://solana.fm/.
+
+# 3: http://solscan.io/.
+
+# 4: http://solanabeach.io/.
+
+# 5: http://validators.app/.
+
+# ON A HIGH LEVEL
+#  Mainnet: Live production environment for deployed applications
+
+# Devnet: Testing with public accessibility for developers experimenting  with their applications
+
+# Testnet: Stress-testing for network upgrades and validator performance
+
+ CLUSTER                       ENDPOINT                                  PURPOSE                    
+# Mainnet                       https://api.mainnet-beta.solana.com      Live Production environment
+#                                                                        (Requires SOL)
+
+# Devnet                        https://api.devnet.solana.com            Public testing /eployment
+#                                                                         (FREE SOL Airdrop )
+
+# Testnet                       https://api.tesnet.solana.com            Validator and stresstesting
+
+
+# DEVNET
+# Devnet serves as a playground for anyone who wants to use Solana as a test drive, as a user, token holder app developeror validator
+
+# Application developers should target Devnet
+# Potential validators should first target Devnet
+# Key Differences between Devnet and Mainnet Beta:
+# 1: Devnet tokens are not real
+# 2: Devnet includes a token faucet for airdrops and application testing
+# 3: Devnet may be subject to ledger resets
+# 4: Devnet typically runs the same software release branch version as Mainnet Beta, but may run a newer minor release version than Mainnet Beta
+
+# Entrypoint for Devnet: entrypoint.devnet.solana.com:8001,
+
+# Devnet Endpoints
+# https://api.devnet.solana.com - Single Solana Labs hosted API node, rate-limited
+# To connect to the devnet Cluster using the Solana CLI:
+
+# solana config set --url https://api.devnet.solana.com
+
+# Devnet Rate Limits
+# Maximum number of requests per 10 seconds per IP: 100,
+# Maximum number of requets per 10 seconds per IP For a single RPC: 40,
+# Maximum concurrent connections per IP: 40,
+# Maximum connection rate per 10 seconds per IP: 40,
+# Maximum amount of data per 30 seconds: 100MB
+
+# test net
+# Testnet is where the Solana core contributors stress test recent release features on a live cluster, particularly focused on network performance, stability and validator behaviour
+
+# Testnet tokens are not real
+# Testnet may be subject to ledger resets
+# Testnet includes a token faucet for airdrops for application testing
+# Testnet typically runs a newer software release  branch than both Devnet and Mainnet Beta
+# Entry point for Testnet: entrypoint.testnet.solana.com:8001
+
+# TESTNET ENDPOINT
+# https://api.testnet.solana.com - single Solana Labs API Node, rate-limited
+
+# To connect to the testnet Cluster using the Solana CLI:
+# solana config set --url https://api.tesnet.solana.com
+
+# Testnet rate limits
+# Maximum number of requests per 10 seconds per IP: 100,
+# Maximum number of requests per 10 seconds per IP for a single RPC: 40,
+# Maximum concurrent connections per IP: 40,
+# Maximum connection rate per 10 seconds per IP: 40,
+# Maximum amount of data per 30 second: 100MB
+
+# MAINNET BETA
+# A permissionless, persistent cluster for Solana users builders, validators and token holders
+# Tokens that are issued on Mainnet Beta are real SOL
+# Entrypoint for MainnetBeta: entrypoint.mainnet-beta.solana.com:8001
+
+# Mainnet Beta endpoints
+# https://api.mainnet-beta.solana.com - Solana Labs hosted API node cluster, backed by a load balance; rate-limited
+
+# Solana command-line configuration
+# To coonect to the mainnet-beta Cluster using the Solana CLI
+# solana config set --url https://api.mainnet-beta.solana.com
+
+# Mainnet beta rate limits
+# Maximum number of requests per 10 seconds per IP: 100,
+# Maximum number of requests per 10 seconds per IP for a single RPC: 40,
+# Maximum concurrent connections per IP: 40
+# Maximum connection rate per 10 seconds per IP: 40,
+# Maximum amount of data per 30 seconds: 100MB
+
+# COMMON HTTP ERROR CODES
+# 403 -- Your IPAddress or website has been blocked. It is time to run your own RPC server(s) or find a private service
+# 429 -- Your IPAddress is exceeding the rate limits. Slow down! Use the Retry-After HTTP response header to determine how long to wait before making another request.
