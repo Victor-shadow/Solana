@@ -1,0 +1,231 @@
+# TOKENS ON SOLANA
+
+
+# Tokens are digital assets that represent ownership over diverse categories of assets,
+# Tokenization enables the digitization of property rights.
+# Tokens on Solana are refered to as Solana Program Library(SPL) Tokens
+
+# NOTE:
+# 1: Token Programs contain all instruction logic for interacting with tokens on the network
+(both fungible and non-fungible)
+
+# 2: A Mint Account represents a specific token and stores global metadata about the token such as the total
+supply and mint authority(address authorized to create new units of a token)
+
+# 3: A Token Account tracks individual ownership of tokens for a specific mint account for a specific 
+owner
+
+# 4: An Associated Token Account is a Token Account created with an address Derived from the owner and mint
+account addresses
+
+# TOKEN Programs
+# The Solana ecosystem has two main Token Programs:
+
+# Token Program(Original)                                              Token                
+ Immutable and widely used                                          Includes all TokenProgramFeaures
+                                                                     
+# Basic token capability(mint, transfer)                            Adds features through extensions
+
+# Token Program contains all instruction logic for interacting with tokens on the network(both fungible and non fungible)
+# All tokens on Solana are effectively data accounts owned by a Token Program
+
+# Address
+# BPF Loader
+
+#                      AccountInfo                           AccountData
+#                      Data                                  Program Code
+# Address              Executable: True
+# Token Program        Lamports: Number
+#                      Owner: BPF Loader 
+
+
+# MINT ACCOUNT
+# Tokens on Solana are uniquely identified by the address of a Mint Account owned by a Token Program
+# The Account acts as a global  counter for a specific token and stores data such as:
+# 1: Supply: Total supply of a Token
+# 2: Decimals: Decimal precision of a token
+# 3: Mint authority: The account authorized  to create new units of the token, increasing the supply
+# 4: Freeze authority: The account authorized to freeze tokens in a Token Account, preventing them from being transfered or being burned
+
+#  Address
+#  TokenProgram
+#                                                                  Account Data
+#                         AccountInfo                              Supply
+#                         Data                                     Decimals
+#                         Executable: false,                       Mint Authority 
+# Address                 Lamports: Number                         Freeze Authority
+# MintAccount             Owner: Token Program
+
+# The details of each Mint Account includes:
+``` rust
+pub struct Mint {
+    /// Optional Authority used to mint new tokens, The mint authority may only be provided  during mint creation. If no mint authority is present then the mint has a fixed supply and no further tokens may be minted
+    pub mint_authority: COption<Pubkey>,
+    //Total supply of tokens
+    pub supply: u64,
+    //Number of base10 digits to the right of the decimal place
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts
+    pub freeze_authority: COption<Pubkey>,
+}
+```
+
+# TOKEN ACCOUNT
+# The Token Program creates Token Accounts to track individual ownership of each token unit. A TokenAccount stores data such as:
+# 1: Mint: The token the Token Account holds units of
+# 2: Owner: The account authorized to transfer tokens from the Token Account
+# 3: Amount: Number of the tokens  the Token Account currently holds
+
+``` rust
+pub struct Accounts {
+    /// The mint associated with this account
+    pub mint: Pubkey;
+    /// The owner of this account
+    pub owner: Pubkey,
+    /// The amount of tokens this accounts hold
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// the account state
+    pub state: AccountState,
+    /// If is_native.is_some, this is a native token, and the value logs
+    /// the rent-exempt reserve. An account is required to be rent-exempt, so
+    /// the value is used by the processor to ensure that wrapped SOL
+    /// accounts do not drop below the threshold
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional Authority to close the account
+    pub close_authority: COption<Pubkey>, 
+}
+```
+
+# Address                                       Address
+# System Program                                Token Program 
+
+
+#    owner                                     owner                 owner
+
+# Address                                      Address               Address
+#  Wallet Account                              Token Account         Mint Account
+#                                              Mint
+#                                              Owner
+#                                              Amount
+
+
+# A wallet needs a token account for each token(mint) it wants to hold, with the wallet address set as the token account owner. Each wallet can own multiple token accounts for the same token(mint) but a token account can only have one owner and hold units of one token(mint)
+
+# Each Token Account Data includes an owner's field identifying who has authority over the Token Accounts. This differs from the program owner specified in the  base Account type, which is the Token Program for all Token Accounts
+
+# Associated Token Account
+# Associated Token Accounts simplify the process of finding the Token Account's address for a specific mint and owner(default token account for a specific mint and owner)
+# An Associated Token Account is created with an Address derived from the owner's address and the mint account's address(A Token Account with the specific address)
+
+# Program Derived Addresses(PDA)
+# It derives an address deterministically using pre-defined inputs, making it easy to find the address of an account
+
+# Each wallet needs its own token account to hold tokens from the same mint
+
+# TOKEN CLI
+# The spl-token CLI helps one experiment with SPL Tokens
+# Creating tokens and accounta require SOL for account rent deposits and transaction fees
+# For the first time, Solana users create a wallet and run  the solana airdrop command in the terminal
+# One can also get devnet SOL from the public web faucet
+
+# solana airdrop 2
+
+# Run:
+# spl-token --help
+
+# To install spl-token CLI locally, run
+# cargo install spl-token-cli
+
+# Create a new Token
+# To create a new token(mint account) run:
+#  spl-token create-token
+
+# A new mint account starts with zero-supply. Check the current supply with:
+# spl-token supply <TOKEN_ADDRESS>
+
+# The supply command for a new token returns 0:
+# -----------------------------------------------------------------
+# spl-token supply 99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg
+# -----------------------------------------------------------------
+
+# Creating a new Mint Account requires a trasaction with two instructions
+# The System Program creates a new account with space for the Mint Account data and transfers ownership to the Token Program
+# The Token Program initializes the data of the new account as a Mint Account.
+
+
+# Create a Token Account
+# To Hold tokens of a specific mint, create a token account:
+# spl-token create-account <TOKEN_ADDRESS>
+
+# -------------------------------------------------------------------------------
+# Command: spl-token create-account 99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg
+# -------------------------------------------------------------------------------
+
+# The create-account command creates an associated token account with a wallet address as the owner
+# To create a token account with a different owner:
+# spl-token create-account --owner <OWNER_ADDRESS> <TOKEN_ADDRESS>
+
+# TOKEN_ADDRESS specifies the mint account for the token account
+# ------------------------------------------------------------------------------
+# spl-token create-account --owner 2i3KvjDCZWxBsqcxBHpdEaZYQwQSYE6LXUMx5VjY5XrR 99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg
+# -----------------------------------------------------------------------------
+
+# Creating an Associated Token Account requires one instruction that invokes the Associated Token Program
+# The Associated Token Program uses the Cross Program Invocations to:
+# 1: Invoke the System Program to create the new account using the provided PDA as the address
+# 2: Invoke the Token Program to initialize the Token Account data
+
+# To create a new Token Account with a new keypair instead of an Associated Token Account Address sends a transaction with two instructions.
+
+# The System Program creates a new account with space for the Token Account data and transfers ownership to the Token Program
+# The Token Program Initializes the data as a Token Account
+
+# MINT TOKENS
+# To create new units of a token, mint tokens to a Token Account:
+# spl-token mint [OPTIONS] <TOKEN_ADDRESS> <TOKEN_AMOUNT> [--] [RECIPIENT_TOKEN_ACCOUNT_ADDRESS]
+
+# --------------------------------------------------------------------------
+# Command: spl-token mint 99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg 100
+# --------------------------------------------------------------------------
+
+# To mint tokens to a different account:
+# --------------------------------------------------------------------------
+# spl-token mint 99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg 100 -- Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt
+# --------------------------------------------------------------------------
+
+# The MintTo instruction on the Token Program creates new tokens. The mint authority must sign the transaction. The instruction mints token to a Token Account and increases the total supply on the Mint Account
+
+# Transfer Tokens
+# To transfer tokens between token accounts:
+# spl-token transfer [OPTIONS] <TOKEN_ADDRESS> <TOKEN_AMOUNT> <RECIPIENT_ADDRESS OR RECIPIENT_TOKEN_ACCOUNT_ADDRESS>
+
+# --------------------------------------------------------------------------------------
+# Command: spl-token transfer  99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg 100 Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt
+# --------------------------------------------------------------------------------------
+
+# The transfer instruction on the Token Program handles token transfers. The owner of the sender's Token Account must sign the transaction
+# The instruction moves tokens between token Accounts
+# Both sender and recipient need token account for the specific token(mint). The sender can include instructions to create the recipient token account in the same transaction
+
+# CREATE TOKEN METADATA
+# The Token Extension Program lets one store metadata(name, symbol, image link) directly on the Mint Account
+
+# To create a token with metadata-extension
+# spl-token create-token --program-id TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb --enable-metadata
+
+# To initialize the metadata
+# spl-token initialize-metadata<TOKEN_MINT_ADDRESS> <TOKEN_NAME> <TOKEN_SYMBOL> <TOKEN_URI>
+
+# The token uri links to off-chain metadata
+
+# ----------------------------------------------------------------------------------------------------
+# Command
+# spl-token initialize-metadata BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP "TokenName" "TokenSymbol" "https://raw.githubusercontent.com/solana-developers/opos-asset/main/assets/DeveloperPortal/metadata.json"
+# ----------------------------------------------------------------------------------------------------
