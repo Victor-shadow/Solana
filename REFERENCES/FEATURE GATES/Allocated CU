@@ -1,0 +1,6 @@
+# Feature Key: B7H2caeia4ZFcpE3QcgMqbiWiBtWrdBRBSJ1DY6Ktxbq
+
+# This Feature gate improves consistency of the CU metering between Firedancer and Agave clients
+
+# Impacts
+# This change should have no impact on developers, data providers or infrastructure providers

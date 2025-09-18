@@ -1,0 +1,32 @@
+# All references to increase in values are in absolute terms with regards to balance Of SOL
+# By staking SOL tokens, one helps to secure the network and earn rewards when doing SOL
+# One can stake by delegating tokens to validators who process transactions and run the network
+# Delegating stake is a shared-risk shared-reward financial model that may provide returns to holders
+# of tokens delegated for a long period. This is achieved by aligning the financial incentives of the token holders(delegators) and validators to whom they delegate
+# The more stake delegated to a validator, the more often this validator is chosen to write new transactions to the ledger. The more transactions the valdator writes, the more rewards the validator and its delegators earn. Validators who configure their systems to be able to process more transactions earn proportionally more rewards and because they keep the network running as fast and smoothly as possible
+# Validators incur costs by running and maintaining their systems, and this is passed on to the delegators in the form of a fee collected as a percentage of rewards earned. This fee is known as commission. Since validators earn more rewards the more stake is delegated to them, they may compete with one another to offer the lowest commission for their srvices
+# Although, this is not implemented in the Solana protocol, in the future, delegators could risk losing tokens when staking through a process known as slashing. Slashing involves the removal and destruction of a portion of a validator's SOL in response to intentional malicious behaviour, such as creating invalid transactions or censoring certain types of transactions or network participants
+
+# Stake SOL Tokens
+# One can stake SOL by moving your tokens into a wallet that supports staking. The wallet provides steps to create a stake account and do the delegation
+
+# Supported Wallet
+# Many web and mobile wallets supports Solana staking operations.(check with favorite wallet maintainers regarding status)
+
+# SOLANA Command line tools
+# Solana command line tools can perform all stake operations, in conjunction with a CLI generated keypair file wallet., a paper wallet, or with a connected Ledger Nano
+
+# Create a Stake Account
+# Follow the wallet's instructions for creating a staking account. This account will be of a different type than one used to send and receive tokens
+
+# Select a Validator
+# Follow the wallet's instructions for selecting a validator. The Solana Foundation does not recommend any particular validator
+# The site solanabeach.io is built and maintained by one of the validators, Staking Facilities. It provides a some high-level graphical information about the network as a whole,  as well as a list of each validator and some recent performance statistics about each one
+# https://solanabeach.io
+# To view block production statistics, use Solana command-line tools:
+
+* solana validators
+* solana block-production
+
+# Delegate your Stake
+# Follow one's wallet instructions to delegate your stake to your chosen validator
